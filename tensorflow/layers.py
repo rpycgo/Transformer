@@ -43,3 +43,30 @@ class PositionalEncoding(Layer):
 
     def call(self, x):
         return x + self.positional_encoding[:, :tf.shape(x)[1], :]
+
+
+class ScaledDotProductAttention(Layer):
+    '''
+    query: batch_size, num_haed, sequence_length, d_model/num_heads
+    key: batch_size, num_haed, sequence_length, d_model/num_heads
+    value: batch_size, num_haed, sequence_length, d_model/num_heads
+    padding_mask: batch_size, 1, 1, sequence_length
+    '''
+    def __init__(self):
+        super(ScaledDotProductAttention, self).__init__()
+    
+    def call(self, query, key, value, masking=None):
+        matmul_qk = tf.matmul(query, key, transpose_b=True) # batch_size, num_head, sequence_length, sequence_length
+
+        d_k = tf.cast(tf.shape(query)[-1], dtype=tf.float32)
+        attention_weights = matmul_qk / tf.math.sqrt(d_k)
+
+        if masking is not None:
+            attention_weights += (mask * -1e10)
+
+        logits = tf.nn.softmax(attention_weights, axis=-1)  # batch_size, num_heads, query_length, key_length
+        attention_weights = tf.matmul(logits, value) # batch_size, num_heads, query_length, d_model/num_heads
+
+        return attention_weights, logits
+
+
