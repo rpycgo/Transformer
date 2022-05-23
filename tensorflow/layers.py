@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from tensorflow.keras.layers import Layer, Dense, Permute
 
 
 class PositionalEncoding(Layer):
@@ -70,3 +70,44 @@ class ScaledDotProductAttention(Layer):
         return attention_weights, logits
 
 
+class MultiHeadAttention(Layer):
+    '''
+    d_model: embedding dimension
+    h: head numbers
+    '''
+    def __init__(self, d_model, h):
+        super(MultiHeadAttention, self).__init__()
+        self.d_model = d_model
+        self.h = h
+        
+        self.d_k = d_model // h
+
+        self.linear_query = Dense(units=d_model)
+        self.linear_key = Dense(units=d_model)
+        self.linear_value = Dense(units=d_model)
+        self.linear_output = Dense(units=d_model)
+
+    def _split_by_heads(self, x):
+        x = tf.reshape(x, shape=(-1, x.shape[1], self.h, self.d_k))
+        x = Permute((2, 1, 3))(x)
+
+        return x
+
+    def call(self, query, key, value, mask=None):
+        query_projected = self.linear_query(query)  # batch_size, query_len, d_model
+        key_projected = self.linear_key(key)        # batch_size, key_len, d_model
+        value_projected = self.linear_value(value)  # batch_size, value_len, d_model
+
+        query_splitted = self._split_by_heads(query)   # batch_size, h, query_len, d_model/h
+        key_splitted = self._split_by_heads(key)       # batch_size, h, key_len, d_model/h
+        value_splitted = self._split_by_heads(value)   # batch_size, h, value_len, d_model/h
+
+        scaled_dot_product_attention, _ = ScaledDotProductAttention()(query_splitted, key_splitted, value_splitted, mask)  # batch_size, h, query_len, d_model/h
+        scaled_dot_product_attention = Permute((2, 1, 3))(scaled_dot_product_attention) # batch_size, query_len, h, d_model/h
+        
+        # concat layer
+        concat_scaled_dot_product_attention = tf.reshape(scaled_dot_product_attention, shape=(-1, query.shape[1], self.d_model))  # batch_size, query_len, d_model
+
+        outputs = self.linear_output(concat_scaled_dot_product_attention)
+
+        return outputs
