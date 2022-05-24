@@ -63,7 +63,7 @@ class ScaledDotProductAttention(Layer):
         attention_weights = matmul_qk / tf.math.sqrt(d_k)
 
         if masking is not None:
-            attention_weights += (mask * -1e10)
+            attention_weights += (masking * -1e10)
 
         logits = tf.nn.softmax(attention_weights, axis=-1)  # batch_size, num_heads, query_length, key_length
         attention_weights = tf.matmul(logits, value) # batch_size, num_heads, query_length, d_model/num_heads
