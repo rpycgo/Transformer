@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, Dense, Permute
+from tensorflow.keras.layers import Layer, Dense, Permute, Dropout, LayerNormalization
+from tensorflow.keras.models import Model
 
 
 class PositionalEncoding(Layer):
@@ -111,3 +112,36 @@ class MultiHeadAttention(Layer):
         outputs = self.linear_output(concat_scaled_dot_product_attention)
 
         return outputs
+
+
+class EncoderNetwork(Model):
+    def __init__(self, max_len, d_model=512, h=8, d_ff=2048, dropout_rate=0.1, name='encoder'):
+        super(EncoderNetwork, self).__init__(name)
+        self.max_len = max_len
+        self.d_model = d_model
+        self.h = h
+        self.d_ff = d_ff
+        self.dropout_rate = dropout_rate
+        
+        self.multi_head_attention = MultiHeadAttention(self.d_model, self.h, self.max_len)
+        self.feed_forward_output = Dense(units=self.d_ff, activation='relu')
+        self.dimension_adjusting = Dense(units=self.d_model, use_bias=False)
+
+    def call(self, input, masking):
+        multi_head_attention = self.multi_head_attention(
+            query=input,
+            key=input,
+            value=input,
+            masking=masking
+            )
+        multi_head_attention = Dropout(rate=self.dropout_rate)(multi_head_attention)
+        multi_head_attention = LayerNormalization()(input + multi_head_attention)
+
+        feed_forward = self.feed_forward_output(multi_head_attention)
+        feed_forward = self.dimension_adjusting(feed_forward)
+        feed_forward = Dropout(rate=self.dropout_rate)(feed_forward)
+
+        outputs = LayerNormalization()(multi_head_attention + feed_forward)
+
+        return outputs
+
