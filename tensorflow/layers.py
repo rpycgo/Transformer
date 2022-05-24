@@ -76,10 +76,11 @@ class MultiHeadAttention(Layer):
     d_model: embedding dimension
     h: head numbers
     '''
-    def __init__(self, d_model, h):
-        super(MultiHeadAttention, self).__init__()
+    def __init__(self, d_model, h, max_len, name='multi-head_attention'):
+        super(MultiHeadAttention, self).__init__(name)
         self.d_model = d_model
         self.h = h
+        self.max_len = max_len
         
         self.d_k = d_model // h
 
@@ -89,12 +90,12 @@ class MultiHeadAttention(Layer):
         self.linear_output = Dense(units=d_model)
 
     def _split_by_heads(self, x):
-        x = tf.reshape(x, shape=(-1, x.shape[1], self.h, self.d_k))
+        x = tf.reshape(x, shape=(-1, self.max_len, self.h, self.d_k))
         x = Permute((2, 1, 3))(x)
 
         return x
 
-    def call(self, query, key, value, mask=None):
+    def call(self, query, key, value, masking=None):
         query_projected = self.linear_query(query)  # batch_size, query_len, d_model
         key_projected = self.linear_key(key)        # batch_size, key_len, d_model
         value_projected = self.linear_value(value)  # batch_size, value_len, d_model
@@ -103,11 +104,11 @@ class MultiHeadAttention(Layer):
         key_splitted = self._split_by_heads(key)       # batch_size, h, key_len, d_model/h
         value_splitted = self._split_by_heads(value)   # batch_size, h, value_len, d_model/h
 
-        scaled_dot_product_attention, _ = ScaledDotProductAttention()(query_splitted, key_splitted, value_splitted, mask)  # batch_size, h, query_len, d_model/h
+        scaled_dot_product_attention, _ = ScaledDotProductAttention()(query_splitted, key_splitted, value_splitted, masking)  # batch_size, h, query_len, d_model/h
         scaled_dot_product_attention = Permute((2, 1, 3))(scaled_dot_product_attention) # batch_size, query_len, h, d_model/h
         
         # concat layer
-        concat_scaled_dot_product_attention = tf.reshape(scaled_dot_product_attention, shape=(-1, query.shape[1], self.d_model))  # batch_size, query_len, d_model
+        concat_scaled_dot_product_attention = tf.reshape(scaled_dot_product_attention, shape=(-1, self.max_len, self.d_model))  # batch_size, query_len, d_model
 
         outputs = self.linear_output(concat_scaled_dot_product_attention)
 
