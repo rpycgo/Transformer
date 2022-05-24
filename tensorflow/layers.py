@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, Dense, Permute, Dropout, LayerNormalization
+from tensorflow.keras.layers import Layer, Dense, Permute, Dropout, LayerNormalization, Embedding, Lambda
 from tensorflow.keras.models import Model
 
 
@@ -144,4 +144,43 @@ class EncoderNetwork(Model):
         outputs = LayerNormalization()(multi_head_attention + feed_forward)
 
         return outputs
+
+
+class Encoder:
+    def __init__(self, vocab_size, max_len, num_encoders=6, d_model=512, h=8, d_ff=2048, dropout_rate=0.1, name='encoder'):
+        self.vocab_size = vocab_size
+        self.max_len = max_len
+        self.num_encoders = num_encoders
+        self.d_model = d_model
+        self.h = h
+        self.d_ff = d_ff
+        self.dropout_rate = dropout_rate
+        
+    def __call__(self):
+        input = Input(shape=(None,))
+        masking = Input(shape=(1, 1, None))
+
+        input_embedding = Embedding(self.vocab_size, self.d_model)(input)
+        input_embedding *= tf.math.sqrt(tf.cast(self.d_model, tf.float32)) # weights * sqrt d_model
+        input_embedding = PositionalEncoding(self.vocab_size, self.d_model)(input_embedding)
+        output = Dropout(rate=self.dropout_rate)(input_embedding)
+
+        for i in range(self.num_encoders):
+            output = EncoderNetwork(
+                max_len=self.max_len,
+                d_model=self.d_model,
+                h=self.h,
+                d_ff=self.d_ff,
+                dropout_rate=self.dropout_rate,
+                name=f'encoder_{i+1}'
+                )(output, masking)
+
+        model = Model(
+            inputs=[input, masking],
+            outputs=output,
+            name='encoder'
+        )
+
+        return model
+
 
