@@ -185,3 +185,46 @@ class Encoder:
         return model
 
 
+class DecoderNetwork(Model):
+    def __init__(self, max_len, d_model=512, h=8, d_ff=2048, dropout_rate=0.1, name='decoder'):
+        super(DecoderNetwork, self).__init__(name)
+        self.max_len = max_len
+        self.d_model = d_model
+        self.h = h
+        self.d_ff = d_ff
+        self.dropout_rate = dropout_rate
+        
+        self.multi_head_attention = MultiHeadAttention(self.d_model, self.h, self.max_len)
+        self.feed_forward_output = Dense(units=self.d_ff, activation='relu')
+        self.dimension_adjusting = Dense(units=self.d_model, use_bias=False)
+
+    def call(self, input, encoder_output, masking_for_leftward, masking):
+        masked_multi_head_attention = self.multi_head_attention(
+            query=input,
+            key=input,
+            value=input,
+            masking=masking_for_leftward,
+            # name='masked_multi-head_attention'
+            )
+        masked_multi_head_attention = Dropout(rate=self.dropout_rate)(masked_multi_head_attention)
+        masked_multi_head_attention = LayerNormalization()(input + masked_multi_head_attention)
+
+        multi_head_attention = self.multi_head_attention(
+            query=masked_multi_head_attention,
+            key=encoder_output,
+            value=encoder_output,
+            masking=masking,
+            # name='multi-head_attention'
+            )
+        multi_head_attention = Dropout(rate=self.dropout_rate)(multi_head_attention)
+        multi_head_attention = LayerNormalization()(masked_multi_head_attention + multi_head_attention)       
+
+        feed_forward = self.feed_forward_output(multi_head_attention)
+        feed_forward = self.dimension_adjusting(multi_head_attention)
+        feed_forward = Dropout(rate=self.dropout_rate)(feed_forward)
+
+        outputs = LayerNormalization()(multi_head_attention + feed_forward)
+
+        return outputs
+
+
