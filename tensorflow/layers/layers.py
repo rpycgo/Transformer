@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Layer, Dense, Permute, Dropout, LayerNormalization, Embedding, Lambda
+from tensorflow.keras.layers import Input, Layer, Dense, Permute, Dropout, LayerNormalization, Embedding, Lambda
 from tensorflow.keras.models import Model
 
 
